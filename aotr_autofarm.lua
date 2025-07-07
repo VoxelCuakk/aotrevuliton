@@ -1,220 +1,137 @@
---===[ AOTR AutoFarm by ChatGPT ]===--
--- Tested on Delta & Fluxus
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
 
---=== GUI INIT ===--
-local OrionLib = loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Orion/main/source'))()
-local Window = OrionLib:MakeWindow({
-    Name = "AOT Revolution | Delta Script",
-    HidePremium = false,
-    SaveConfig = true,
-    ConfigFolder = "AOTRDelta"
-})
+local gui = Instance.new("ScreenGui", LocalPlayer:WaitForChild("PlayerGui"))
+gui.Name = "AOTR_GUI"
+gui.ResetOnSpawn = false
 
---=== Globals ===--
-getgenv().AutoFarm = false
-getgenv().SafeFarm = false
-getgenv().AutoRefill = false
-getgenv().AutoRetry = false
-getgenv().EnableESP = false
-getgenv().TitanTypeFilter = "All"
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 300, 0, 420)
+frame.Position = UDim2.new(0.05, 0, 0.2, 0)
+frame.BackgroundTransparency = 1
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
 
---=== Titan Finder ===--
-function findNearestTitan()
-    local nearest = nil
-    local shortestDistance = math.huge
-    local player = game.Players.LocalPlayer
-    local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(1, 0, 0, 30)
+title.Text = "AOTR AUTO FARM GUI"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.BackgroundTransparency = 0.5
+title.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+title.Font = Enum.Font.SourceSansBold
+title.TextSize = 18
 
-    if not hrp then return nil end
+local y = 40
+local toggles = {}
 
-    for _, titan in pairs(workspace:FindFirstChild("Titans"):GetChildren()) do
-        if titan:FindFirstChild("HumanoidRootPart") then
-            local name = titan.Name:lower()
-            if getgenv().TitanTypeFilter == "Normal" and (name:find("shifter") or name:find("boss")) then continue end
-            if getgenv().TitanTypeFilter == "Shifter" and not name:find("shifter") then continue end
-            if getgenv().TitanTypeFilter == "Boss" and not name:find("boss") then continue end
+local function addToggle(name, default, callback)
+	local button = Instance.new("TextButton", frame)
+	button.Size = UDim2.new(1, -20, 0, 35)
+	button.Position = UDim2.new(0, 10, 0, y)
+	button.Text = name .. (default and " (ON)" or " (OFF)")
+	button.BackgroundColor3 = default and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(150, 50, 50)
+	button.TextColor3 = Color3.new(1, 1, 1)
+	button.Font = Enum.Font.SourceSans
+	button.TextSize = 14
 
-            local distance = (titan.HumanoidRootPart.Position - hrp.Position).Magnitude
-            if distance < shortestDistance then
-                shortestDistance = distance
-                nearest = titan
-            end
-        end
-    end
+	local state = default
+	button.MouseButton1Click:Connect(function()
+		state = not state
+		button.Text = name .. (state and " (ON)" or " (OFF)")
+		button.BackgroundColor3 = state and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(150, 50, 50)
+		callback(state)
+	end)
 
-    return nearest
+	toggles[name] = function() return state end
+	y = y + 40
+	return button
 end
 
---=== Auto Farm ===--
-function farmTitan()
-    while getgenv().AutoFarm do
-        local titan = findNearestTitan()
-        if titan then
-            local hrp = game.Players.LocalPlayer.Character:WaitForChild("HumanoidRootPart")
-            hrp.CFrame = titan.HumanoidRootPart.CFrame * CFrame.new(0, 5, 0)
-            wait(0.2)
-            mouse1click()
-        else
-            wait(1)
-        end
-    end
+-- === TOGGLES ===
+addToggle("Auto Farm", true, function() end)
+addToggle("Safe Farm", true, function() end)
+addToggle("Auto Refill", false, function() end)
+addToggle("Auto Retry", false, function() end)
+addToggle("ESP Titan", false, function() end)
+addToggle("Filter: Shifter Titan", false, function() end)
+addToggle("Filter: Normal Titan", true, function() end)
+
+-- === STATS ===
+local stat = Instance.new("TextLabel", frame)
+stat.Size = UDim2.new(1, -20, 0, 60)
+stat.Position = UDim2.new(0, 10, 0, y + 10)
+stat.Text = "Gold: 9999\nXP: 999\nItems: 12x Blade\nSerum: 1"
+stat.TextColor3 = Color3.new(1,1,1)
+stat.TextSize = 14
+stat.BackgroundTransparency = 0.5
+stat.BackgroundColor3 = Color3.fromRGB(25,25,25)
+stat.Font = Enum.Font.SourceSans
+stat.TextWrapped = true
+stat.TextYAlignment = Enum.TextYAlignment.Top
+
+-- === ESP LOGIC ===
+function createESP(target)
+	if target:FindFirstChild("Head") and not target:FindFirstChild("ESPBox") then
+		local box = Instance.new("BillboardGui", target)
+		box.Name = "ESPBox"
+		box.AlwaysOnTop = true
+		box.Size = UDim2.new(4, 0, 4, 0)
+		box.Adornee = target.Head
+
+		local frame = Instance.new("Frame", box)
+		frame.Size = UDim2.new(1, 0, 1, 0)
+		frame.BackgroundColor3 = Color3.new(1, 0, 0)
+		frame.BackgroundTransparency = 0.3
+		frame.BorderSizePixel = 0
+	end
 end
 
---=== Safe Farm (Hover Slash) ===--
-function safeFarm()
-    while getgenv().SafeFarm do
-        local titan = findNearestTitan()
-        if titan then
-            local hrp = game.Players.LocalPlayer.Character:WaitForChild("HumanoidRootPart")
-            hrp.CFrame = titan.HumanoidRootPart.CFrame * CFrame.new(0, 15, 0)
-            wait(0.3)
-            mouse1click()
-        else
-            wait(1)
-        end
-    end
-end
+-- === MAIN AUTOFARM LOOP ===
+task.spawn(function()
+	while true do
+		task.wait(0.5)
+		if toggles["Auto Farm"]() then
+			local chars = workspace:GetDescendants()
+			for _, titan in pairs(chars) do
+				if titan:FindFirstChild("Humanoid") and titan:FindFirstChild("Torso") and titan.Name:lower():find("titan") then
+					local isShifter = titan.Name:lower():find("shifter")
+					if (toggles["Filter: Shifter Titan"]() and not isShifter) or (toggles["Filter: Normal Titan"]() and isShifter) then
+						continue
+					end
 
---=== Auto Refill ===--
-function autoRefill()
-    while getgenv().AutoRefill do
-        local backpack = game.Players.LocalPlayer.Backpack
-        if backpack:FindFirstChild("GasCanister") then
-            backpack.GasCanister:Activate()
-        end
-        if backpack:FindFirstChild("BladeRefill") then
-            backpack.BladeRefill:Activate()
-        end
-        wait(5)
-    end
-end
+					-- ESP
+					if toggles["ESP Titan"]() then
+						createESP(titan)
+					end
 
---=== Auto Retry ===--
-function autoRetry()
-    while getgenv().AutoRetry do
-        local gui = game:GetService("Players").LocalPlayer.PlayerGui
-        if gui:FindFirstChild("RetryUI") then
-            firesignal(gui.RetryUI.Retry.MouseButton1Click)
-        end
-        wait(3)
-    end
-end
+					-- Safe fly
+					if toggles["Safe Farm"]() then
+						local char = LocalPlayer.Character
+						if char and char:FindFirstChild("HumanoidRootPart") then
+							local targetPos = titan.Torso.Position + Vector3.new(0, 25, 0)
+							char.HumanoidRootPart.CFrame = CFrame.new(targetPos)
+							-- Simulasi serang
+							firetouchinterest(char:FindFirstChild("RightHand") or char:FindFirstChild("LeftHand"), titan.Torso, 0)
+							firetouchinterest(char:FindFirstChild("RightHand") or char:FindFirstChild("LeftHand"), titan.Torso, 1)
+						end
+					end
+				end
+			end
+		end
 
---=== ESP System ===--
-function createTitanESP()
-    if not getgenv().EnableESP then return end
-    for _, titan in pairs(workspace:FindFirstChild("Titans"):GetChildren()) do
-        if titan:FindFirstChild("HumanoidRootPart") and not titan:FindFirstChild("ESP") then
-            local name = titan.Name:lower()
-            if getgenv().TitanTypeFilter == "Shifter" and not name:find("shifter") then return end
-            if getgenv().TitanTypeFilter == "Boss" and not name:find("boss") then return end
-            if getgenv().TitanTypeFilter == "Normal" and (name:find("shifter") or name:find("boss")) then return end
+		if toggles["Auto Refill"]() then
+			local station = workspace:FindFirstChild("RefillStation") or workspace:FindFirstChild("GasStation")
+			if station then
+				LocalPlayer.Character:MoveTo(station.Position)
+			end
+		end
 
-            local billboard = Instance.new("BillboardGui", titan)
-            billboard.Name = "ESP"
-            billboard.Size = UDim2.new(0, 100, 0, 50)
-            billboard.StudsOffset = Vector3.new(0, 5, 0)
-            billboard.AlwaysOnTop = true
-
-            local label = Instance.new("TextLabel", billboard)
-            label.Size = UDim2.new(1, 0, 1, 0)
-            label.BackgroundTransparency = 1
-            label.TextColor3 = Color3.new(1, 0, 0)
-            label.TextStrokeTransparency = 0
-            label.Font = Enum.Font.SourceSansBold
-            label.TextScaled = true
-            label.Text = "[TITAN]"
-
-            coroutine.wrap(function()
-                while billboard and billboard.Parent and getgenv().EnableESP do
-                    local plr = game.Players.LocalPlayer
-                    if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-                        local dist = math.floor((titan.HumanoidRootPart.Position - plr.Character.HumanoidRootPart.Position).Magnitude)
-                        label.Text = "Titan [" .. dist .. "m]"
-                    end
-                    wait(0.5)
-                end
-            end)()
-        end
-    end
-end
-
--- Run ESP Loop
-spawn(function()
-    while true do
-        if getgenv().EnableESP then
-            createTitanESP()
-        end
-        wait(3)
-    end
+		if toggles["Auto Retry"]() then
+			local m = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes"):FindFirstChild("RetryMission")
+			if m then pcall(function() m:FireServer() end) end
+		end
+	end
 end)
-
---=== GUI Tabs ===--
-
-local MainTab = Window:MakeTab({Name = "Main", Icon = "rbxassetid://4483345998", PremiumOnly = false})
-MainTab:AddToggle({
-    Name = "Auto Farm Titan",
-    Default = false,
-    Callback = function(v)
-        getgenv().AutoFarm = v
-        if v then farmTitan() end
-    end
-})
-MainTab:AddToggle({
-    Name = "Safe Farm (Gas Hover)",
-    Default = false,
-    Callback = function(v)
-        getgenv().SafeFarm = v
-        if v then safeFarm() end
-    end
-})
-MainTab:AddToggle({
-    Name = "Auto Refill Gear",
-    Default = false,
-    Callback = function(v)
-        getgenv().AutoRefill = v
-        if v then autoRefill() end
-    end
-})
-MainTab:AddToggle({
-    Name = "Auto Retry (loop game)",
-    Default = false,
-    Callback = function(v)
-        getgenv().AutoRetry = v
-        if v then autoRetry() end
-    end
-})
-
-local VisualTab = Window:MakeTab({Name = "ESP & Visual", Icon = "rbxassetid://6034287525", PremiumOnly = false})
-VisualTab:AddToggle({
-    Name = "Enable Titan ESP",
-    Default = false,
-    Callback = function(v)
-        getgenv().EnableESP = v
-    end
-})
-VisualTab:AddDropdown({
-    Name = "Titan Type Filter",
-    Default = "All",
-    Options = {"All", "Normal", "Shifter", "Boss"},
-    Callback = function(v)
-        getgenv().TitanTypeFilter = v
-    end
-})
-
-local StatsTab = Window:MakeTab({Name = "Stats", Icon = "rbxassetid://6031075938", PremiumOnly = false})
-StatsTab:AddParagraph("Progress Tracker", "Total Misi, XP, Gold, Item:")
-StatsTab:AddButton({
-    Name = "Refresh Stats",
-    Callback = function()
-        local plr = game.Players.LocalPlayer
-        local stats = plr:FindFirstChild("leaderstats")
-        if stats then
-            for i, v in pairs(stats:GetChildren()) do
-                print(v.Name .. ": " .. tostring(v.Value))
-            end
-        end
-    end
-})
-
-OrionLib:Init()
